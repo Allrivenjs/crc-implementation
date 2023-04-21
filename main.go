@@ -30,14 +30,8 @@ func textToPolynomial(text string) ([]int, error) {
 
 	return polynomial, nil
 }
-func polynomialDegree(polynomial []int) int {
-	maxDegree := 0
-	for _, exp := range polynomial {
-		if exp > maxDegree {
-			maxDegree = exp
-		}
-	}
-	return maxDegree
+func polynomialDegree(polynomial string) int {
+	return len(polynomial) - 1
 }
 func polynomialToBinary(polynomial []int) string {
 	maxExp := 0
@@ -109,7 +103,26 @@ func crc32(binData string, poly uint32) (uint32, error) {
 
 	return checksum, nil
 }
+func isBinary(s string) bool {
+	for _, r := range s {
+		if r != '0' && r != '1' {
+			return false
+		}
+	}
+	return true
+}
+func textToBinary(s string) (string, error) {
+	if isBinary(s) {
+		return s, nil
+	}
 
+	var binaryString string
+	for _, r := range s {
+		binaryString += fmt.Sprintf("%08b", r)
+	}
+
+	return binaryString, nil
+}
 func xor(a, b string) string {
 	result := ""
 	length := len(a)
@@ -126,24 +139,26 @@ func xor(a, b string) string {
 	}
 	return result
 }
+
 func generateZerosWithGradPoly(i int) string {
 	var result string
 	for _i := 0; _i < i; _i++ {
-		result += fmt.Sprintf("%d ", 0)
+		result += fmt.Sprintf("%d", 0)
 	}
 	return result
 }
 
-func crc32Binary(data, poly string, grad int) string {
+func crc32Binary(data, poly string) string {
 	logrus.Info("Iniciando el cálculo del CRC-32 en binario")
+	degree := polynomialDegree(poly)
 	// Añadir ceros al final de los datos igual al grado del polinomio
-	data += "00000000000000000000000000000000"
-	logrus.Infof("Datos con ceros añadidos: %s", data)
+	data += generateZerosWithGradPoly(degree)
+	logrus.Infof("Datos con ceros añadidos: %d", degree)
 
 	divisor := poly
-	remainder := data[:33]
+	remainder := data[:degree+1]
 
-	for i := 33; i < len(data); i++ {
+	for i := degree; i < len(data); i++ {
 		if remainder[0] == '1' {
 			logrus.Infof("Iteración %d: Dividiendo %s por %s", i-32, remainder, divisor)
 			remainder = xor(remainder, divisor)
@@ -161,6 +176,18 @@ func crc32Binary(data, poly string, grad int) string {
 	return remainder
 }
 
+func binPolynomial(polynomial string) string {
+	if isBinary(polynomial) {
+		return polynomial
+	}
+	_polynomial, err := textToPolynomial(polynomial)
+	if err != nil {
+		logrus.Fatal("Ocurrio un error al convertir el polinomio", err)
+		panic(err)
+	}
+	return polynomialToBinary(_polynomial)
+}
+
 func main() {
 
 	reader := bufio.NewReader(os.Stdin)
@@ -174,24 +201,54 @@ func main() {
 	text = text[:len(text)-1]
 	logrus.Println("El polinomio es: ", text)
 
-	polynomial, err := textToPolynomial(text)
-	if err != nil {
-		logrus.Fatal("Ocurrio un error al convertir el polinomio", err)
-		panic(err)
-	}
+	_binPolynomial := binPolynomial(text)
+	logrus.Println("El polinomio en binario es: ", _binPolynomial)
 
-	logrus.Println("El polinomio es: ", polynomial)
-	grad := polynomialDegree(polynomial)
+	grad := polynomialDegree(_binPolynomial)
 	logrus.Println("El grado del polinomio es: ", grad)
-
-	binPolynomial := polynomialToBinary(polynomial)
-	logrus.Println("El polinomio en binario es: ", binPolynomial)
 
 	//polynomial = binaryToPolynomial(binPolynomial)
 	//logrus.Println("El polinomio en binario es: ", binPolynomial)
 	//poly := uint32(0xEDB88320)
-	poly := "1001"
-	checksum := crc32Binary(binPolynomial, poly, grad)
-	logrus.Infof("Checksum CRC-32: %s\n", checksum)
+	fmt.Print("Ingrese la trama: ")
+	trama, err := reader.ReadString('\n')
+	if err != nil {
+		logrus.Fatal("Ocurrio un error al leer el polinomio", err)
+		panic(err)
+	}
+
+	trama = trama[:len(trama)-1]
+	logrus.Println("El trama es: ", trama)
+
+	fmt.Print("Desea corromper los datos? (Y: yes, N: no): ")
+	c, err := reader.ReadString('\n')
+	if err != nil {
+		logrus.Fatal("Ocurrio un error al leer el polinomio", err)
+		panic(err)
+	}
+
+	c = c[:len(c)-1]
+	binTrama, err := textToBinary(trama)
+	originalCRC := crc32Binary(binTrama, _binPolynomial)
+	logrus.Infof("Checksum CRC-32: %s\n", originalCRC)
+	if c == "Y" {
+		logrus.Println("Corrompiendo datos...")
+		binTrama = binTrama[:len(binTrama)-1] + "1"
+		// Simular la corrupción de datos cambiando un bit
+		corruptedData := binTrama[:len(binTrama)-2] + "11011011" + binTrama[len(binTrama):]
+		fmt.Printf("Datos corrompidos: %s\n", corruptedData)
+		// Calcular el CRC-32 de los datos corrompidos
+		corruptedCRC := crc32Binary(corruptedData, _binPolynomial)
+		fmt.Printf("CRC-32 corrompido: %s\n", corruptedCRC)
+		// Comprobar si los valores CRC coinciden
+		if originalCRC == corruptedCRC {
+			fmt.Println("Los datos no están corrompidos.")
+		} else {
+			fmt.Println("Los datos están corrompidos.")
+		}
+	} else {
+		logrus.Println("No se corrompieron los datos")
+	}
+
 	//x^6 + x^5 + x^4 + x^3 + x^2 + x
 }
