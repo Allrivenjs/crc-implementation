@@ -7,6 +7,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 func textToPolynomial(text string) ([]int, error) {
@@ -117,6 +118,7 @@ func isBinary(s string) bool {
 	}
 	return true
 }
+
 func textToBinary(s string) (string, error) {
 	// primero, verificamos si la trama ya se encuentra en binario. Si lo esta, se devuelve tal cual
 	if isBinary(s) {
@@ -215,7 +217,7 @@ func main() {
 
 	// eliminamos el ultimo caracter del reader (\n)
 	text = text[:len(text)-1]
-
+	text = strings.ReplaceAll(text, "\r", "")
 	logrus.Println("El polinomio es: ", text)
 
 	// extraemos el número binario del polinomio
@@ -224,6 +226,7 @@ func main() {
 	logrus.Println("El polinomio en binario es: ", _binPolynomial)
 
 	// hallamos el grado del polinomio
+	_binPolynomial = strings.ReplaceAll(_binPolynomial, "\r", "")
 	grad := polynomialDegree(_binPolynomial)
 	logrus.Println("El grado del polinomio es: ", grad)
 
@@ -241,6 +244,7 @@ func main() {
 
 	// eliminamos el ultimo caracter del reader (\n)
 	trama = trama[:len(trama)-1]
+	trama = strings.ReplaceAll(trama, "\r", "")
 	logrus.Println("El trama es: ", trama)
 
 	fmt.Print("Desea corromper los datos? (Y: yes, N: no): ")
@@ -260,20 +264,21 @@ func main() {
 	originalCRC := crc32Binary(binTrama, _binPolynomial)
 
 	logrus.Infof("Checksum CRC-32: %s\n", originalCRC)
+	c = strings.TrimSpace(c)
 	if c == "Y" {
 		logrus.Println("Corrompiendo datos...")
 		binTrama = binTrama[:len(binTrama)-1] + "1"
 		// Simular la corrupción de datos cambiando un bit
-		corruptedData := binTrama[:len(binTrama)-2] + "11011011" + binTrama[len(binTrama):]
-		fmt.Printf("Datos corrompidos: %s\n", corruptedData)
+		corruptedData := binTrama[:len(binTrama)-2] + "1111111" + binTrama[len(binTrama):]
+		logrus.Printf("Datos corrompidos: %s", corruptedData)
 		// Calcular el CRC-32 de los datos corrompidos
 		corruptedCRC := crc32Binary(corruptedData, _binPolynomial)
-		fmt.Printf("CRC-32 corrompido: %s\n", corruptedCRC)
+		logrus.Printf("CRC-32 corrompido: %s", corruptedCRC)
 		// Comprobar si los valores CRC coinciden
 		if originalCRC == corruptedCRC {
-			fmt.Println("Los datos no están corrompidos.")
+			logrus.Println("Los datos no están corruptos.")
 		} else {
-			fmt.Println("Los datos están corrompidos.")
+			logrus.Println("Los datos están corruptos.")
 		}
 	} else {
 		logrus.Println("No se corrompieron los datos")
