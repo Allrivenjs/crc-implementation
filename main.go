@@ -96,7 +96,10 @@ func crc32(binData string, poly uint32) (uint32, error) {
 	logrus.Infof("Procesando datos: %s", binData)
 	for i := 0; i < len(binData); i++ {
 		logrus.Infof("Iteración %d, CRC actual: %08X", i, crc)
+		//crc = (crc >> 8) ^ table[byte(crc)^byte(data&0xFF)]: Actualiza el valor de crc realizando una operación XOR
+		//entre el valor actual de crc desplazado 8 bits a la derecha y el valor en la tabla de CRC correspondiente al byte menos significativo de data.
 		crc = (crc >> 8) ^ table[byte(crc)^byte(data&0xFF)]
+		//data >>= 8: Desplaza los bits de data 8 posiciones a la derecha, descartando el byte menos significativo que se acaba de procesar.
 		data >>= 8
 	}
 
@@ -122,9 +125,9 @@ func textToBinary(s string) (string, error) {
 
 	var binaryString string
 	for _, r := range s {
-		// se convierte cada valor de r en una cadena de 8 bits (un byte) en formato binario usando la 
-    // verbosidad %08b, que indica que la salida debe tener 8 caracteres y se debe completar con 
-    // ceros a la izquierda si es necesario
+		// se convierte cada valor de r en una cadena de 8 bits (un byte) en formato binario usando la
+		// verbosidad %08b, que indica que la salida debe tener 8 caracteres y se debe completar con
+		// ceros a la izquierda si es necesario
 		binaryString += fmt.Sprintf("%08b", r)
 	}
 
@@ -157,7 +160,7 @@ func generateZerosWithGradPoly(i int) string {
 
 func crc32Binary(data, poly string) string {
 	logrus.Info("Iniciando el cálculo del CRC-32 en binario")
-  // hallamos nuevamente el grado del polinomio
+	// hallamos nuevamente el grado del polinomio
 	degree := polynomialDegree(poly)
 	// Añadir ceros al final de los datos igual al grado del polinomio
 	data += generateZerosWithGradPoly(degree)
@@ -168,11 +171,11 @@ func crc32Binary(data, poly string) string {
 
 	for i := degree; i < len(data); i++ {
 		if remainder[0] == '1' {
-			logrus.Infof("Iteración %d: Dividiendo %s por %s", i-32, remainder, divisor)
+			logrus.Infof("Iteración %d: Dividiendo %s por %s", i-degree, remainder, divisor)
 			remainder = xor(remainder, divisor)
 		}
 		remainder = remainder[1:] + string(data[i])
-		logrus.Infof("Iteración %d: Residuo actual: %s", i-32, remainder)
+		logrus.Infof("Iteración %d: Residuo actual: %s", i-degree, remainder)
 	}
 
 	if remainder[0] == '1' {
@@ -252,8 +255,8 @@ func main() {
 	// convertimos la trama de datos a números binarios
 	binTrama, err := textToBinary(trama)
 
-  // finalmente, una vez obtenidos el polinomio generador en binario y la trama en binario, 
-  // empezamos el algoritmo de redundancia ciclica
+	// finalmente, una vez obtenidos el polinomio generador en binario y la trama en binario,
+	// empezamos el algoritmo de redundancia ciclica
 	originalCRC := crc32Binary(binTrama, _binPolynomial)
 
 	logrus.Infof("Checksum CRC-32: %s\n", originalCRC)
@@ -277,4 +280,9 @@ func main() {
 	}
 
 	//x^6 + x^5 + x^4 + x^3 + x^2 + x
+
+	//example for error check
+	//data := "010010000110111101101100011011000110000101101100001011110110001101110010" // Datos en binario
+	//poly := "10000100110001011101101111011011"
+
 }
