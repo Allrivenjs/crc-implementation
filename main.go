@@ -30,9 +30,11 @@ func textToPolynomial(text string) ([]int, error) {
 
 	return polynomial, nil
 }
+
 func polynomialDegree(polynomial string) int {
 	return len(polynomial) - 1
 }
+
 func polynomialToBinary(polynomial []int) string {
 	maxExp := 0
 	for _, exp := range polynomial {
@@ -104,6 +106,7 @@ func crc32(binData string, poly uint32) (uint32, error) {
 	return checksum, nil
 }
 func isBinary(s string) bool {
+	// un string es binario si lo unico que contiene son '0' y '1'
 	for _, r := range s {
 		if r != '0' && r != '1' {
 			return false
@@ -112,12 +115,16 @@ func isBinary(s string) bool {
 	return true
 }
 func textToBinary(s string) (string, error) {
+	// primero, verificamos si la trama ya se encuentra en binario. Si lo esta, se devuelve tal cual
 	if isBinary(s) {
 		return s, nil
 	}
 
 	var binaryString string
 	for _, r := range s {
+		// se convierte cada valor de r en una cadena de 8 bits (un byte) en formato binario usando la 
+    // verbosidad %08b, que indica que la salida debe tener 8 caracteres y se debe completar con 
+    // ceros a la izquierda si es necesario
 		binaryString += fmt.Sprintf("%08b", r)
 	}
 
@@ -150,6 +157,7 @@ func generateZerosWithGradPoly(i int) string {
 
 func crc32Binary(data, poly string) string {
 	logrus.Info("Iniciando el cálculo del CRC-32 en binario")
+  // hallamos nuevamente el grado del polinomio
 	degree := polynomialDegree(poly)
 	// Añadir ceros al final de los datos igual al grado del polinomio
 	data += generateZerosWithGradPoly(degree)
@@ -177,9 +185,11 @@ func crc32Binary(data, poly string) string {
 }
 
 func binPolynomial(polynomial string) string {
+	// si el polinomio ya esta expresado en binario, lo retornamos tal cual
 	if isBinary(polynomial) {
 		return polynomial
 	}
+	// transformamos el polinomio en string a un array de enteros, presentando el polinomio binario
 	_polynomial, err := textToPolynomial(polynomial)
 	if err != nil {
 		logrus.Fatal("Ocurrio un error al convertir el polinomio", err)
@@ -189,21 +199,28 @@ func binPolynomial(polynomial string) string {
 }
 
 func main() {
-
+	// Creamos una instancia de reader
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Print("Ingrese el polinomio a codificar: ")
+
+	// ejecutamos la lectura de string del reader
 	text, err := reader.ReadString('\n')
 	if err != nil {
 		logrus.Fatal("Ocurrio un error al leer el polinomio", err)
 		panic(err)
 	}
 
+	// eliminamos el ultimo caracter del reader (\n)
 	text = text[:len(text)-1]
+
 	logrus.Println("El polinomio es: ", text)
 
+	// extraemos el número binario del polinomio
 	_binPolynomial := binPolynomial(text)
+
 	logrus.Println("El polinomio en binario es: ", _binPolynomial)
 
+	// hallamos el grado del polinomio
 	grad := polynomialDegree(_binPolynomial)
 	logrus.Println("El grado del polinomio es: ", grad)
 
@@ -211,12 +228,15 @@ func main() {
 	//logrus.Println("El polinomio en binario es: ", binPolynomial)
 	//poly := uint32(0xEDB88320)
 	fmt.Print("Ingrese la trama: ")
+
+	// usamos el reader para pedir la trama de datos
 	trama, err := reader.ReadString('\n')
 	if err != nil {
 		logrus.Fatal("Ocurrio un error al leer el polinomio", err)
 		panic(err)
 	}
 
+	// eliminamos el ultimo caracter del reader (\n)
 	trama = trama[:len(trama)-1]
 	logrus.Println("El trama es: ", trama)
 
@@ -228,8 +248,14 @@ func main() {
 	}
 
 	c = c[:len(c)-1]
+
+	// convertimos la trama de datos a números binarios
 	binTrama, err := textToBinary(trama)
+
+  // finalmente, una vez obtenidos el polinomio generador en binario y la trama en binario, 
+  // empezamos el algoritmo de redundancia ciclica
 	originalCRC := crc32Binary(binTrama, _binPolynomial)
+
 	logrus.Infof("Checksum CRC-32: %s\n", originalCRC)
 	if c == "Y" {
 		logrus.Println("Corrompiendo datos...")
