@@ -135,6 +135,7 @@ func textToBinary(s string) (string, error) {
 
 	return binaryString, nil
 }
+
 func xor(a, b string) string {
 	result := ""
 	length := len(a)
@@ -160,31 +161,57 @@ func generateZerosWithGradPoly(i int) string {
 	return result
 }
 
-func crc32Binary(data, poly string) string {
+//fmt.Sprintf("Tamaño: %d, Cadena: %s, Divisor: %s, Residuo: %s", len(remainder), oldremainder, divisor, remainder)
+//1001
+//10011110
+
+func crc32Binary(data, poly string, check ...string) string {
 	logrus.Info("Iniciando el cálculo del CRC-32 en binario")
-	// hallamos nuevamente el grado del polinomio
+	// Hallamos nuevamente el grado del polinomio
 	degree := polynomialDegree(poly)
 	// Añadir ceros al final de los datos igual al grado del polinomio
-	data += generateZerosWithGradPoly(degree)
-	logrus.Infof("Datos con ceros añadidos: %d", degree)
+	if len(check) > 0 {
+		data += check[0]
+	} else {
+		data += generateZerosWithGradPoly(degree)
+	}
+
+	logrus.Infof("Datos con ceros añadidos: %s", data)
 
 	divisor := poly
 	remainder := data[:degree+1]
 
-	for i := degree; i < len(data); i++ {
+	// Crear un array para almacenar el proceso de cada iteración
+	process := []string{fmt.Sprintf("Tamaño: %d, Cadena: %s, Divisor: %s, Residuo: %s", len(remainder), data, divisor, remainder)}
+
+	i := degree
+	for i < len(data) {
+		oldremainder := remainder
 		if remainder[0] == '1' {
 			logrus.Infof("Iteración %d: Dividiendo %s por %s", i-degree, remainder, divisor)
 			remainder = xor(remainder, divisor)
+			process[len(process)-1] = fmt.Sprintf("Tamaño: %d, Cadena: %s, Divisor: %s, Residuo: %s", len(remainder), oldremainder, divisor, remainder)
 		}
-		remainder = remainder[1:] + string(data[i])
-		logrus.Infof("Iteración %d: Residuo actual: %s", i-degree, remainder)
+
+		if i < len(data)-1 {
+			remainder = remainder[1:] + string(data[i+1])
+			i++
+		} else {
+			break
+		}
+
+		// Añadir el tamaño, divisor y residuo actual al array process
+		//process = append(process, fmt.Sprintf("Tamaño: %d, Cadena: %s, Divisor: %s, Residuo: %s", len(remainder), oldremainder, divisor, remainder))
 	}
 
-	if remainder[0] == '1' {
-		logrus.Infof("Última iteración: Dividiendo %s por %s", remainder, divisor)
-		remainder = xor(remainder, divisor)
+	// Eliminar la última entrada del array process, ya que contiene el residuo final incorrecto
+	process = process[:len(process)-1]
+
+	// Imprimir el array process con todos los pasos del proceso
+	logrus.Info("Proceso completo:")
+	for i, step := range process {
+		logrus.Infof("Paso %d: %s", i, step)
 	}
-	remainder = remainder[1:]
 
 	return remainder
 }
@@ -262,10 +289,9 @@ func main() {
 	// finalmente, una vez obtenidos el polinomio generador en binario y la trama en binario,
 	// empezamos el algoritmo de redundancia ciclica
 	originalCRC := crc32Binary(binTrama, _binPolynomial)
-
 	logrus.Infof("Checksum CRC-32: %s\n", originalCRC)
 	c = strings.TrimSpace(c)
-	if c == "Y" {
+	if c == "Y" || c == "y" {
 		logrus.Println("Corrompiendo datos...")
 		binTrama = binTrama[:len(binTrama)-1] + "1"
 		// Simular la corrupción de datos cambiando un bit
@@ -273,15 +299,22 @@ func main() {
 		logrus.Printf("Datos corrompidos: %s", corruptedData)
 		// Calcular el CRC-32 de los datos corrompidos
 		corruptedCRC := crc32Binary(corruptedData, _binPolynomial)
+		check := crc32Binary(binTrama, _binPolynomial, corruptedCRC)
 		logrus.Printf("CRC-32 corrompido: %s", corruptedCRC)
 		// Comprobar si los valores CRC coinciden
-		if originalCRC == corruptedCRC {
+		if check == "0000" {
 			logrus.Println("Los datos no están corruptos.")
 		} else {
 			logrus.Println("Los datos están corruptos.")
 		}
 	} else {
-		logrus.Println("No se corrompieron los datos")
+		check := crc32Binary(binTrama, _binPolynomial, originalCRC)
+		logrus.Printf("Check %v", check)
+		if check == "0000" {
+			logrus.Println("Los datos no están corruptos.")
+		} else {
+			logrus.Println("Los datos están corruptos.")
+		}
 	}
 
 	//x^6 + x^5 + x^4 + x^3 + x^2 + x
