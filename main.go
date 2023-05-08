@@ -1,62 +1,108 @@
 package main
 
 import (
-	"bufio"
+	"encoding/json"
 	"fmt"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/sirupsen/logrus"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
 )
 
 func textToPolynomial(text string) ([]int, error) {
-	re := regexp.MustCompile(`x\^(\d+)`)
-	//get x alone
-	reX := regexp.MustCompile(`x`)
+	re := regexp.MustCompile(`([+-]?\d*x\^\d+|[+-]?\d*x|[+-]?\d+$|[+-]x)`)
 
 	matches := re.FindAllStringSubmatch(text, -1)
 
 	var polynomial []int
 	for _, match := range matches {
-		exp, err := strconv.Atoi(match[1])
-		if err != nil {
-			return nil, fmt.Errorf("error al analizar el exponente: %v", err)
+		// Si hay una coincidencia para la expresión x^n
+		if strings.Contains(match[0], "^") {
+			// Extraer el exponente del término
+			exp, err := strconv.Atoi(strings.Split(match[0], "^")[1])
+			if err != nil {
+				return nil, fmt.Errorf("error al analizar el exponente: %v", err)
+			}
+			polynomial = append(polynomial, exp)
+			// Si hay una coincidencia para la expresión x
+		} else if strings.Contains(match[0], "x") {
+			// El coeficiente es 1 si no hay nada delante del "x"
+			// o -1 si hay un signo menos delante del "x"
+			coeff := 1
+			if len(match[0]) > 1 {
+				sign := string(match[0][0])
+				if sign == "-" {
+					coeff = -1
+				}
+			}
+			polynomial = append(polynomial, coeff)
+			// Si hay una coincidencia para la expresión constante
+		} else if match[0] != "" {
+			coeff, err := strconv.Atoi(match[0])
+			if err != nil {
+				return nil, fmt.Errorf("error al analizar el coeficiente: %v", err)
+			}
+			polynomial = append(polynomial, coeff)
+		} else {
+			// Término sin coeficiente (equivalente a coeficiente de 1)
+			polynomial = append(polynomial, 1)
 		}
-		polynomial = append(polynomial, exp)
 	}
-	if reX != nil {
-		polynomial = append(polynomial, 1)
-	}
-
 	return polynomial, nil
 }
 
-func polynomialDegree(polynomial string) int {
-	return len(polynomial) - 1
-}
-
-func polynomialToBinary(polynomial []int) string {
-	maxExp := 0
-	for _, exp := range polynomial {
-		if exp > maxExp {
-			maxExp = exp
+func polyToBinary(poly string) ([]int, error) {
+	// Convertir el string de polinomio a una lista de coeficientes
+	coeffs, err := textToPolynomial(poly)
+	logrus.Println(coeffs)
+	if err != nil {
+		panic(err)
+	}
+	// Encontrar el valor máximo en el array
+	maxVal := 0
+	for _, val := range coeffs {
+		if val > maxVal {
+			maxVal = val
 		}
 	}
 
-	bitLength := maxExp + 1
-	binaryRepresentation := make([]byte, bitLength)
+	// Crear un nuevo array de tamaño maxVal + 1 y llenarlo de ceros
+	result := make([]int, maxVal+1)
 
-	for i := 0; i < bitLength; i++ {
-		binaryRepresentation[i] = '0'
+	// Colocar un uno en las posiciones correspondientes a los valores del array original
+	for i, val := range coeffs {
+
+		if i == len(coeffs)-1 {
+			result[val-1] = 1
+		} else {
+			result[val] = 1
+		}
+
 	}
 
-	for _, exp := range polynomial {
-		binaryRepresentation[bitLength-exp-1] = '1'
-	}
-
-	return string(binaryRepresentation)
+	return result, nil
 }
+
+func polynomialDegree(polynomial string) int {
+	return len(polynomial)
+}
+
+func polynomialToBinary(polynomial []int) string {
+	var binaryString strings.Builder
+
+	for i := len(polynomial) - 1; i >= 0; i-- {
+		if polynomial[i] == 1 {
+			binaryString.WriteString("1")
+		} else {
+			binaryString.WriteString("0")
+		}
+	}
+
+	return binaryString.String()
+}
+
 func binaryToPolynomial(binaryRepresentation string) []int {
 	var polynomial []int
 	bitLength := len(binaryRepresentation)
@@ -166,7 +212,8 @@ func generateZerosWithGradPoly(i int) string {
 //10011110
 
 func crc32Binary(data, poly string, check ...string) string {
-	logrus.Info("Iniciando el cálculo del CRC-32 en binario")
+	//logrus.Info("Iniciando el cálculo del CRC-32 en binario")
+	response = append(response, fmt.Sprintf("Los datos no están corruptos."))
 	// Hallamos nuevamente el grado del polinomio
 	degree := polynomialDegree(poly)
 	// Añadir ceros al final de los datos igual al grado del polinomio
@@ -176,7 +223,8 @@ func crc32Binary(data, poly string, check ...string) string {
 		data += generateZerosWithGradPoly(degree)
 	}
 
-	logrus.Infof("Datos con ceros añadidos: %s", data)
+	//logrus.Infof("Datos con ceros añadidos: %s", data)
+	response = append(response, fmt.Sprintf("Datos con ceros añadidos: %s", data))
 
 	divisor := poly
 	remainder := data[:degree+1]
@@ -188,7 +236,8 @@ func crc32Binary(data, poly string, check ...string) string {
 	for i < len(data) {
 		oldremainder := remainder
 		if remainder[0] == '1' {
-			logrus.Infof("Iteración %d: Dividiendo %s por %s", i-degree, remainder, divisor)
+			//logrus.Infof("Iteración %d: Dividiendo %s por %s", i-degree, remainder, divisor)
+			response = append(response, fmt.Sprintf("Iteración %d: Dividiendo %s por %s", i-degree, remainder, divisor))
 			remainder = xor(remainder, divisor)
 			process[len(process)-1] = fmt.Sprintf("Tamaño: %d, Cadena: %s, Divisor: %s, Residuo: %s", len(remainder), oldremainder, divisor, remainder)
 		}
@@ -208,9 +257,11 @@ func crc32Binary(data, poly string, check ...string) string {
 	process = process[:len(process)-1]
 
 	// Imprimir el array process con todos los pasos del proceso
-	logrus.Info("Proceso completo:")
+	//logrus.Info("Proceso completo:")
+	response = append(response, fmt.Sprintf("Proceso completo:"))
 	for i, step := range process {
-		logrus.Infof("Paso %d: %s", i, step)
+		//logrus.Infof("Paso %d: %s", i, step)
+		response = append(response, fmt.Sprintf("Paso %d: %s", i, step))
 	}
 
 	return remainder
@@ -222,7 +273,7 @@ func binPolynomial(polynomial string) string {
 		return polynomial
 	}
 	// transformamos el polinomio en string a un array de enteros, presentando el polinomio binario
-	_polynomial, err := textToPolynomial(polynomial)
+	_polynomial, err := polyToBinary(polynomial)
 	if err != nil {
 		logrus.Fatal("Ocurrio un error al convertir el polinomio", err)
 		panic(err)
@@ -230,97 +281,143 @@ func binPolynomial(polynomial string) string {
 	return polynomialToBinary(_polynomial)
 }
 
-func main() {
+var response []string
+
+func eject(poly, trama string, c bool) {
 	// Creamos una instancia de reader
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Ingrese el polinomio a codificar: ")
+	//reader := bufio.NewReader(os.Stdin)
+	//fmt.Print("Ingrese el polinomio a codificar: ")
 
 	// ejecutamos la lectura de string del reader
-	text, err := reader.ReadString('\n')
-	if err != nil {
-		logrus.Fatal("Ocurrio un error al leer el polinomio", err)
-		panic(err)
-	}
+	//text, err := reader.ReadString('\n')
+	//if err != nil {
+	//	logrus.Fatal("Ocurrio un error al leer el polinomio", err)
+	//	panic(err)
+	//}
 
 	// eliminamos el ultimo caracter del reader (\n)
-	text = text[:len(text)-1]
-	text = strings.ReplaceAll(text, "\r", "")
-	logrus.Println("El polinomio es: ", text)
+	//text = text[:len(text)-1]
+	//text = strings.ReplaceAll(text, "\r", "")
+	response = append(response, fmt.Sprintf("El polinomio rectificador es: %v", poly))
 
 	// extraemos el número binario del polinomio
-	_binPolynomial := binPolynomial(text)
+	_binPolynomial := binPolynomial(poly)
 
-	logrus.Println("El polinomio en binario es: ", _binPolynomial)
+	response = append(response, fmt.Sprintf("El polinomio rectificador en binario es: %v", _binPolynomial))
 
 	// hallamos el grado del polinomio
 	_binPolynomial = strings.ReplaceAll(_binPolynomial, "\r", "")
 	grad := polynomialDegree(_binPolynomial)
-	logrus.Println("El grado del polinomio es: ", grad)
+	response = append(response, fmt.Sprintf("El grado del polinomio rectificador es: %v", grad))
 
 	//polynomial = binaryToPolynomial(binPolynomial)
 	//logrus.Println("El polinomio en binario es: ", binPolynomial)
 	//poly := uint32(0xEDB88320)
-	fmt.Print("Ingrese la trama: ")
+	//fmt.Print("Ingrese la trama: ")
 
 	// usamos el reader para pedir la trama de datos
-	trama, err := reader.ReadString('\n')
-	if err != nil {
-		logrus.Fatal("Ocurrio un error al leer el polinomio", err)
-		panic(err)
-	}
+	//trama, err := reader.ReadString('\n')
+	//if err != nil {
+	//	logrus.Fatal("Ocurrio un error al leer el polinomio", err)
+	//	panic(err)
+	//}
 
 	// eliminamos el ultimo caracter del reader (\n)
-	trama = trama[:len(trama)-1]
-	trama = strings.ReplaceAll(trama, "\r", "")
-	logrus.Println("El trama es: ", trama)
+	//trama = trama[:len(trama)-1]
+	//trama = strings.ReplaceAll(trama, "\r", "")
+	response = append(response, fmt.Sprintf("El trama es: %v", trama))
 
-	fmt.Print("Desea corromper los datos? (Y: yes, N: no): ")
-	c, err := reader.ReadString('\n')
-	if err != nil {
-		logrus.Fatal("Ocurrio un error al leer el polinomio", err)
-		panic(err)
-	}
+	//fmt.Print("Desea corromper los datos? (Y: yes, N: no): ")
+	//c, err := reader.ReadString('\n')
+	//if err != nil {
+	//	logrus.Fatal("Ocurrio un error al leer el polinomio", err)
+	//	panic(err)
+	//}
 
-	c = c[:len(c)-1]
+	//c = c[:len(c)-1]
 
 	// convertimos la trama de datos a números binarios
-	binTrama, err := textToBinary(trama)
+
+	binTrama := binPolynomial(trama)
 
 	// finalmente, una vez obtenidos el polinomio generador en binario y la trama en binario,
 	// empezamos el algoritmo de redundancia ciclica
 	originalCRC := crc32Binary(binTrama, _binPolynomial)
-	logrus.Infof("Checksum CRC-32: %s\n", originalCRC)
-	c = strings.TrimSpace(c)
-	if c == "Y" || c == "y" {
-		logrus.Println("Corrompiendo datos...")
+	response = append(response, fmt.Sprintf("Checksum CRC-32: %s\n", originalCRC))
+
+	//c = strings.TrimSpace(c)
+	if c {
+		response = append(response, fmt.Sprintf("Corrompiendo datos..."))
 		binTrama = binTrama[:len(binTrama)-1] + "1"
 		// Simular la corrupción de datos cambiando un bit
 		corruptedData := binTrama[:len(binTrama)-2] + "1111111" + binTrama[len(binTrama):]
-		logrus.Printf("Datos corrompidos: %s", corruptedData)
+		response = append(response, fmt.Sprintf("Datos corrompidos: %s", corruptedData))
 		// Calcular el CRC-32 de los datos corrompidos
 		corruptedCRC := crc32Binary(corruptedData, _binPolynomial)
 		check := crc32Binary(binTrama, _binPolynomial, corruptedCRC)
-		logrus.Printf("CRC-32 corrompido: %s", corruptedCRC)
+		response = append(response, fmt.Sprintf("CRC-32 corrompido: %s", corruptedCRC))
 		// Comprobar si los valores CRC coinciden
-		if check == "0000" {
-			logrus.Println("Los datos no están corruptos.")
+		if check == generateZerosWithGradPoly(grad) {
+			response = append(response, fmt.Sprintf("Los datos no están corruptos."))
 		} else {
-			logrus.Println("Los datos están corruptos.")
+			response = append(response, fmt.Sprintf("Los datos están corruptos."))
 		}
 	} else {
 		check := crc32Binary(binTrama, _binPolynomial, originalCRC)
 		logrus.Printf("Check %v", check)
-		if check == "0000" {
-			logrus.Println("Los datos no están corruptos.")
+		//logrus.Println(generateZerosWithGradPoly(grad + 1))
+		if check == generateZerosWithGradPoly(grad) {
+			response = append(response, fmt.Sprintf("Los datos no están corruptos."))
 		} else {
-			logrus.Println("Los datos están corruptos.")
+			response = append(response, fmt.Sprintf("Los datos están corruptos."))
 		}
 	}
 
 	//x^6 + x^5 + x^4 + x^3 + x^2 + x
 
 	//example for error check
-	//data := "010010000110111101101100011011000110000101101100001011110110001101110010" // Datos en binario
-	//poly := "10000100110001011101101111011011"
+	//1001
+	//10011110
+}
 
+type request struct {
+	Poly      string `json:"poly"`
+	Trama     string `json:"trama"`
+	Corructed bool   `json:"corructed"`
+}
+
+type Response struct {
+	Resultado []string `json:"resultado"`
+}
+
+func main() {
+	app := fiber.New()
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+	}))
+
+	app.Post("/crc", func(c *fiber.Ctx) error {
+		var body request
+		if err := c.BodyParser(&body); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Cannot parse JSON",
+			})
+		}
+
+		eject(body.Poly, body.Trama, body.Corructed)
+		//logrus.Println(response)
+		response_ := Response{Resultado: response}
+		jsonResponse, err := json.Marshal(response_)
+		if err != nil {
+			// Manejo de error
+		}
+
+		err = c.JSON(string(jsonResponse))
+
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	logrus.Fatal(app.Listen(":3000"))
 }
